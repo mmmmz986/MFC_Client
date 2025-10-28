@@ -8,6 +8,7 @@
 #include "MFC_ClientDlg.h"
 #include "afxdialogex.h"
 #include <iostream>
+#include <iomanip>
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -155,10 +156,8 @@ HCURSOR CMFCClientDlg::OnQueryDragIcon()
 
 void CMFCClientDlg::OnBnClickedBtnConnect()
 {
-	Packet net;
-
 	// 서버 연결 시도
-	if (!net.Connect("127.0.0.1", 9000))
+	if (!m_net.Connect("10.10.21.101", 7000))
 	{
 		AfxMessageBox(L"서버 연결 실패!");
 		return;
@@ -167,10 +166,17 @@ void CMFCClientDlg::OnBnClickedBtnConnect()
 	// 간단한 문자열 전송
 	std::string msg = "Hello Server!";
 	std::vector<uint8_t> body(msg.begin(), msg.end());
-	net.Send(MsgType::IMG_REQ, body);
+	m_net.Send(MsgType::IMG_REQ, body);
+
+	// 로그 출력
+	std::cout << "[SEND] body(string): " << msg << std::endl;
+	std::cout << "[SEND] body(hex): ";
+	for (auto b : body)
+		std::cout << std::hex << std::setw(2) << std::setfill('0') << (int)b << " ";
+	std::cout << std::dec << std::endl;
 
 	// 서버 응답 수신
-	MsgType type;
+	/* MsgType type;
 	uint32_t imgId;
 	std::vector<uint8_t> recvBuf;
 
@@ -182,7 +188,7 @@ void CMFCClientDlg::OnBnClickedBtnConnect()
 	else
 	{
 		AfxMessageBox(L"응답 수신 실패");
-	}
+	} */
 
-	net.Disconnect();
+	//net.Disconnect();
 }

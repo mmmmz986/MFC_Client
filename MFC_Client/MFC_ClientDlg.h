@@ -12,7 +12,7 @@ class CMFCClientDlg : public CDialogEx
 public:
 	CMFCClientDlg(CWnd* pParent = nullptr);	// 표준 생성자입니다.
 
-// 대화 상자 데이터입니다.
+// 대화 상자 초기 화면입니다.
 #ifdef AFX_DESIGN_TIME
 	enum { IDD = IDD_MFC_CLIENT_DIALOG };
 #endif
@@ -22,6 +22,8 @@ public:
 
 
 // 구현입니다.
+private:
+	Packet m_net;
 protected:
 	HICON m_hIcon;
 
