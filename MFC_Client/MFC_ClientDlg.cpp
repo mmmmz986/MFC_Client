@@ -1,5 +1,4 @@
-﻿
-// MFC_ClientDlg.cpp: 구현 파일
+﻿// MFC_ClientDlg.cpp: 구현 파일
 //
 
 #include "pch.h"
@@ -9,6 +8,7 @@
 #include "afxdialogex.h"
 #include <iostream>
 #include <iomanip>
+#include <vector> // MsgType과 vector<uint8_t>를 위해 필요
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -21,19 +21,18 @@ class CAboutDlg : public CDialogEx
 public:
 	CAboutDlg();
 
-// 대화 상자 데이터입니다.
+	// 대화 상자 데이터입니다.
 #ifdef AFX_DESIGN_TIME
 	enum { IDD = IDD_ABOUTBOX };
 #endif
 
-	protected:
-	virtual void DoDataExchange(CDataExchange* pDX);    // DDX/DDV 지원입니다.
-
-// 구현입니다.
+protected:
+	virtual void DoDataExchange(CDataExchange* pDX);
+	// 구현입니다.
 protected:
 	DECLARE_MESSAGE_MAP()
 };
-CAboutDlg::CAboutDlg() : CDialogEx(IDD_ABOUTBOX) { }
+CAboutDlg::CAboutDlg() : CDialogEx(IDD_ABOUTBOX) {}
 void CAboutDlg::DoDataExchange(CDataExchange* pDX)
 {
 	CDialogEx::DoDataExchange(pDX);
@@ -43,6 +42,37 @@ BEGIN_MESSAGE_MAP(CAboutDlg, CDialogEx)
 END_MESSAGE_MAP()
 // CMFCClientDlg 대화 상자
 
+//추가: 수신 스레드 함수
+UINT CMFCClientDlg::RecvThreadFunc(LPVOID pParam)
+{
+	CMFCClientDlg* pDlg = reinterpret_cast<CMFCClientDlg*>(pParam);
+	if (!pDlg) return 1;
+
+	MsgType type;
+	uint32_t imgId;
+	std::vector<uint8_t> recvBuf;
+
+	std::cout << "[INFO] 수신 스레드 시작됨. 데이터 대기 중...\n";
+
+	while (!pDlg->m_bStopRecvThread)
+	{
+		if (pDlg->m_net.Receive(type, imgId, recvBuf))
+		{
+			// 수신 성공: 서버 패킷 처리 로직
+			std::cout << "[RECV] 패킷 수신 성공! Type=" << (int)type << ", ID=" << imgId << ", BodySize=" << recvBuf.size() << "\n";
+		}
+		else
+		{
+			if (!pDlg->m_bStopRecvThread)
+			{
+				std::cout << "[ERROR] 수신 실패 또는 연결 종료됨. 스레드 종료.\n";
+			}
+			break;
+		}
+	}
+	std::cout << "[INFO] 수신 스레드 종료됨.\n";
+	return 0;
+}
 
 
 CMFCClientDlg::CMFCClientDlg(CWnd* pParent /*=nullptr*/)
@@ -94,14 +124,14 @@ BOOL CMFCClientDlg::OnInitDialog()
 		}
 	}
 
-	// 이 대화 상자의 아이콘을 설정합니다.  응용 프로그램의 주 창이 대화 상자가 아닐 경우에는
-	//  프레임워크가 이 작업을 자동으로 수행합니다.
+	// 이 대화 상자의 아이콘을 설정합니다.  응용 프로그램의 주 창이 대화 상자가 아닐 경우에는
+	//  프레임워크가 이 작업을 자동으로 수행합니다.
 	SetIcon(m_hIcon, TRUE);			// 큰 아이콘을 설정합니다.
 	SetIcon(m_hIcon, FALSE);		// 작은 아이콘을 설정합니다.
 
 	// TODO: 여기에 추가 초기화 작업을 추가합니다.
 
-	return TRUE;  // 포커스를 컨트롤에 설정하지 않으면 TRUE를 반환합니다.
+	return TRUE;
 }
 
 void CMFCClientDlg::OnSysCommand(UINT nID, LPARAM lParam)
@@ -118,8 +148,8 @@ void CMFCClientDlg::OnSysCommand(UINT nID, LPARAM lParam)
 }
 
 // 대화 상자에 최소화 단추를 추가할 경우 아이콘을 그리려면
-//  아래 코드가 필요합니다.  문서/뷰 모델을 사용하는 MFC 애플리케이션의 경우에는
-//  프레임워크에서 이 작업을 자동으로 수행합니다.
+//  아래 코드가 필요합니다.  문서/뷰 모델을 사용하는 MFC 애플리케이션의 경우에는
+//  프레임워크에서 이 작업을 자동으로 수행합니다.
 
 void CMFCClientDlg::OnPaint()
 {
@@ -147,7 +177,7 @@ void CMFCClientDlg::OnPaint()
 }
 
 // 사용자가 최소화된 창을 끄는 동안에 커서가 표시되도록 시스템에서
-//  이 함수를 호출합니다.
+//  이 함수를 호출합니다.
 HCURSOR CMFCClientDlg::OnQueryDragIcon()
 {
 	return static_cast<HCURSOR>(m_hIcon);
@@ -156,6 +186,12 @@ HCURSOR CMFCClientDlg::OnQueryDragIcon()
 
 void CMFCClientDlg::OnBnClickedBtnConnect()
 {
+	// 추가: 실행 중이면 중복 실행 방지
+	if (m_pRecvThread != nullptr) {
+		AfxMessageBox(L"이미 서버에 연결되어 있습니다.");
+		return;
+	}
+
 	// 서버 연결 시도
 	if (!m_net.Connect("10.10.21.101", 7000))
 	{
@@ -163,8 +199,18 @@ void CMFCClientDlg::OnBnClickedBtnConnect()
 		return;
 	}
 
+	// 추가: 연결 성공 시 스레드 시작
+	m_bStopRecvThread = false;
+	m_pRecvThread = AfxBeginThread(RecvThreadFunc, this);
+	if (m_pRecvThread == nullptr)
+	{
+		AfxMessageBox(L"수신 스레드 시작 실패!");
+		m_net.Disconnect();
+		return;
+	}
+
 	// 간단한 문자열 전송
-	std::string msg = "Hello Server!";
+	std::string msg = "123";
 	std::vector<uint8_t> body(msg.begin(), msg.end());
 	m_net.Send(MsgType::IMG_REQ, body);
 
@@ -175,20 +221,28 @@ void CMFCClientDlg::OnBnClickedBtnConnect()
 		std::cout << std::hex << std::setw(2) << std::setfill('0') << (int)b << " ";
 	std::cout << std::dec << std::endl;
 
-	// 서버 응답 수신
-	/* MsgType type;
-	uint32_t imgId;
-	std::vector<uint8_t> recvBuf;
+}
 
-	if (net.Receive(type, imgId, recvBuf))
+BOOL CMFCClientDlg::DestroyWindow()
+{
+	// 대화 상자가 닫힐 때 수신 스레드 종료 요청
+	if (m_pRecvThread != nullptr)
 	{
-		CString text(L"서버 응답 수신 성공!");
-		AfxMessageBox(text);
+		std::cout << "[INFO] DestroyWindow 호출됨. 수신 스레드 종료 요청 시작.\n";
+
+		m_bStopRecvThread = true; // 스레드 루프 종료 플래그 설정
+
+		// Blocking 중인 recv() 함수를 깨우기 위해 Disconnect() 호출
+		m_net.Disconnect();
+
+		// 스레드가 완전히 종료될 때까지 대기
+		::WaitForSingleObject(m_pRecvThread->m_hThread, INFINITE);
+
+		// 메모리 해제
+		delete m_pRecvThread;
+		m_pRecvThread = nullptr;
+		std::cout << "[INFO] 수신 스레드 안전하게 종료 및 해제 완료.\n";
 	}
-	else
-	{
-		AfxMessageBox(L"응답 수신 실패");
-	} */
 
-	//net.Disconnect();
+	return CDialogEx::DestroyWindow();
 }

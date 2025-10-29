@@ -115,6 +115,8 @@ bool Packet::Receive(MsgType& outType, uint32_t& outImgId, std::vector<uint8_t>&
     PacketHeader header{};
     if (!recvAll(&header, sizeof(header)))
         return false;
+    //header.bodyLen = ntohl(header.bodyLen); //추가 (빅엔디안 > 리틀엔디안 변환)
+    //header.imgId = ntohl(header.imgId); //추가
     outType = static_cast<MsgType>(header.msgType);
     outImgId = header.imgId;
 
